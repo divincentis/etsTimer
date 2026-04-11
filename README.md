@@ -1,6 +1,6 @@
-# Steffes CCRP Controller
+# ETS Peak Controller
 
-An ESP32-based replacement for Steffes Connect that controls a CCRP (Controlled Charge Rate Program) unit via relay outputs. Designed for utilities that provide peak/off-peak time-of-use signals to Steffes ETS (Electric Thermal Storage) systems.
+An ESP32-based replacement for Steffes Connect or other ETS peak/off peak timers that controls an ETS control/relay unit via relay outputs.
 
 ## Features
 
@@ -21,7 +21,7 @@ An ESP32-based replacement for Steffes Connect that controls a CCRP (Controlled 
 | ESP32-WROOM-32 dev board | Any standard 38-pin variant |
 | DS3231 RTC module | Critical — do not rely on NTP alone |
 | 8-channel 5V relay module | JD-VCC separated, optocoupler isolated |
-| Project enclosure | See `hardware/` for FreeCAD files |
+| Project enclosure | See `hardware/` for FreeCAD files (eventually) |
 
 ## GPIO Assignments
 
@@ -72,7 +72,7 @@ For remote access, add the ESP32 to your Tailscale network and access it by its 
 
 ## Default Schedule
 
-Based on utility rate 202.11 (General Service Whole-House Time-Of-Use):
+Based on MPEI utility rate 202.11 (General Service Whole-House Time-Of-Use):
 
 - **Peak:** 5:00 PM – 10:00 PM, Monday through Saturday
 - **Off-Peak:** All other hours, and all day Sunday
