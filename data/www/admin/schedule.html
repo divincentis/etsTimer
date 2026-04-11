@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schedule — Admin</title>
+<style>
+  :root {
+    --bg:      #0d0f12;
+    --surface: #161a20;
+    --border:  #2a2f38;
+    --accent:  #e8a020;
+    --offpeak: #30c060;
+    --dim:     #5a6070;
+    --text:    #c8cdd8;
+    --mono:    'Courier New', Courier, monospace;
+    --sans:    'Arial Narrow', Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 16px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+
+  h1 {
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .back {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--dim);
+    text-decoration: none;
+  }
+  .back:hover { color: var(--text); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .card-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 16px;
+  }
+
+  .field-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .field-row:last-child { margin-bottom: 0; }
+
+  label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .field-hint {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--dim);
+    margin-top: 2px;
+  }
+
+  input[type="time"] {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 10px;
+    border-radius: 3px;
+    width: 130px;
+    text-align: right;
+  }
+
+  input:focus { outline: 1px solid var(--accent); }
+
+  input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--offpeak);
+    cursor: pointer;
+  }
+
+  .btn {
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: var(--accent);
+    border: none;
+    color: #000;
+    padding: 10px 20px;
+    border-radius: 3px;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.15s;
+  }
+
+  .btn:hover { background: #f0b030; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .notice {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--dim);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    line-height: 1.6;
+  }
+
+  .tz-badge {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--offpeak);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+  }
+
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 8px 18px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Schedule — Admin</h1>
+  <a class="back" href="/">‹ Dashboard</a>
+</header>
+
+<div class="notice">
+  Changes take effect immediately and persist through reboots.
+  Peak window applies Monday through Saturday. Sunday is always off-peak.
+</div>
+
+<div class="tz-badge" id="tzBadge">
+  Timezone: Mountain Time (MST/MDT) — DST handled automatically
+</div>
+
+<div class="card">
+  <div class="card-label">Peak Window — Mon through Sat</div>
+
+  <div class="field-row">
+    <div>
+      <label>Peak Start</label>
+      <div class="field-hint">Default: 5:00 PM</div>
+    </div>
+    <input type="time" id="startTime" value="17:00">
+  </div>
+
+  <div class="field-row">
+    <div>
+      <label>Peak End</label>
+      <div class="field-hint">Default: 10:00 PM</div>
+    </div>
+    <input type="time" id="endTime" value="22:00">
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-label">Sunday</div>
+  <div class="field-row">
+    <label>Always Off-Peak</label>
+    <input type="checkbox" id="sundayOffPeak" checked>
+  </div>
+</div>
+
+<button class="btn" id="saveBtn" onclick="saveSchedule()">Save Schedule</button>
+
+<div id="toast"></div>
+
+<script>
+  async function loadSchedule() {
+    try {
+      const r = await fetch('/admin/api/schedule');
+      if (r.status === 401) return;
+      const d = await r.json();
+
+      const sh = String(d.monSat.startHour).padStart(2,'0');
+      const sm = String(d.monSat.startMinute).padStart(2,'0');
+      const eh = String(d.monSat.endHour).padStart(2,'0');
+      const em = String(d.monSat.endMinute).padStart(2,'0');
+
+      document.getElementById('startTime').value        = sh + ':' + sm;
+      document.getElementById('endTime').value          = eh + ':' + em;
+      document.getElementById('sundayOffPeak').checked  = d.sundayAlwaysOffPeak;
+    } catch(e) {
+      console.warn('Failed to load schedule:', e);
+    }
+  }
+
+  async function loadTzStatus() {
+    try {
+      const r = await fetch('/api/status');
+      const d = await r.json();
+      if (d.tz) {
+        document.getElementById('tzBadge').textContent =
+          'Timezone: Mountain Time — currently ' + d.tz + ' (DST handled automatically)';
+      }
+    } catch(e) {}
+  }
+
+  async function saveSchedule() {
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    const [startH, startM] = document.getElementById('startTime').value.split(':').map(Number);
+    const [endH,   endM]   = document.getElementById('endTime').value.split(':').map(Number);
+
+    const payload = {
+      monSat: {
+        startHour:   startH,
+        startMinute: startM,
+        endHour:     endH,
+        endMinute:   endM
+      },
+      sundayAlwaysOffPeak: document.getElementById('sundayOffPeak').checked
+    };
+
+    try {
+      const r = await fetch('/admin/api/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const d = await r.json();
+      showToast(d.ok ? 'Schedule saved' : 'Save failed');
+    } catch(e) {
+      showToast('Request failed');
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Save Schedule';
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  loadSchedule();
+  loadTzStatus();
+</script>
+</body>
+</html>

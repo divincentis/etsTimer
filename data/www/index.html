@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Steffes CCRP Controller</title>
+<style>
+  :root {
+    --bg:        #0d0f12;
+    --surface:   #161a20;
+    --border:    #2a2f38;
+    --accent:    #e8a020;
+    --peak:      #e84040;
+    --offpeak:   #30c060;
+    --setback:   #4080e0;
+    --dim:       #5a6070;
+    --text:      #c8cdd8;
+    --mono:      'Courier New', Courier, monospace;
+    --sans:      'Arial Narrow', Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 16px;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+
+  header h1 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  #clock {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--dim);
+    text-align: right;
+  }
+
+  #dow { color: var(--text); font-size: 0.75rem; }
+
+  /* ── Main Status ── */
+  .status-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 24px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .status-indicator {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 12px currentColor;
+  }
+
+  .status-label {
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+
+  .status-sub {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--dim);
+    margin-top: 4px;
+  }
+
+  /* ── Grid ── */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+  }
+
+  .card-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 10px;
+  }
+
+  /* ── Setback Toggle ── */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .toggle-state {
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .btn {
+    font-family: var(--sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:active { opacity: 0.7; }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { background: #f0b030; border-color: #f0b030; color: #000; }
+
+  /* ── Override ── */
+  .zone-select {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    border-radius: 3px;
+    width: 100%;
+    margin-bottom: 10px;
+    appearance: none;
+  }
+
+  .zone-select:focus { outline: 1px solid var(--accent); }
+
+  /* ── Relay Grid ── */
+  .relay-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .relay-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .relay-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+
+  .relay-dot.on {
+    background: var(--offpeak);
+    box-shadow: 0 0 8px var(--offpeak);
+  }
+
+  .relay-name {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--dim);
+    text-align: center;
+    line-height: 1.3;
+  }
+
+  /* ── Footer ── */
+  footer {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .meta {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--dim);
+  }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 8px 18px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1 id="deviceName">CCRP Controller</h1>
+    <div id="dow" style="font-size:0.7rem;color:var(--dim);margin-top:2px;letter-spacing:0.1em;text-transform:uppercase"></div>
+  </div>
+  <div id="clock">--:--:--<br><span style="font-size:0.7rem"></span></div>
+</header>
+
+<!-- Peak Status -->
+<div class="status-card">
+  <div class="status-indicator" id="peakDot" style="color:var(--dim);background:var(--dim)"></div>
+  <div>
+    <div class="status-label" id="peakLabel">—</div>
+    <div class="status-sub" id="peakSub">Waiting for data...</div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- Setback -->
+  <div class="card">
+    <div class="card-label">Setback</div>
+    <div class="toggle-row">
+      <div class="toggle-state" id="setbackLabel" style="color:var(--dim)">—</div>
+      <button class="btn" id="setbackBtn" onclick="toggleSetback()">Toggle</button>
+    </div>
+  </div>
+
+  <!-- System Info -->
+  <div class="card">
+    <div class="card-label">System</div>
+    <div style="font-family:var(--mono);font-size:0.72rem;line-height:1.8;color:var(--dim)">
+      NTP <span id="ntpStatus">—</span><br>
+      RTC <span id="rtcTemp">—</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Override -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-label">Override Pulse</div>
+  <select class="zone-select" id="zoneSelect">
+    <option value="0">Zone — RL1</option>
+    <option value="1">Zone — RL2, RL3</option>
+    <option value="2">Zone — RL7, RL8, RL9</option>
+  </select>
+  <button class="btn btn-primary" id="overrideBtn" onclick="fireOverride()" style="width:100%">
+    Send Override Pulse
+  </button>
+</div>
+
+<!-- Relay Status -->
+<div class="card">
+  <div class="card-label" style="margin-bottom:12px">Relay Status</div>
+  <div class="relay-grid">
+    <div class="relay-item">
+      <div class="relay-dot" id="r1"></div>
+      <div class="relay-name">RL1<br>Peak</div>
+    </div>
+    <div class="relay-item">
+      <div class="relay-dot" id="r2"></div>
+      <div class="relay-name">RL2<br>Setback</div>
+    </div>
+    <div class="relay-item">
+      <div class="relay-dot" id="r3"></div>
+      <div class="relay-name">RL3<br>Override</div>
+    </div>
+    <div class="relay-item">
+      <div class="relay-dot" id="r4"></div>
+      <div class="relay-name">RL4<br>Sel RL1</div>
+    </div>
+    <div class="relay-item">
+      <div class="relay-dot" id="r5"></div>
+      <div class="relay-name">RL5<br>Sel RL2,3</div>
+    </div>
+    <div class="relay-item">
+      <div class="relay-dot" id="r6"></div>
+      <div class="relay-name">RL6<br>Sel RL7-9</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="meta">Steffes CCRP Controller</div>
+  <a href="/admin/schedule.html" style="font-family:var(--mono);font-size:0.65rem;color:var(--dim);text-decoration:none">Admin ›</a>
+</footer>
+
+<div id="toast"></div>
+
+<script>
+  let setbackState = false;
+
+  async function fetchStatus() {
+    try {
+      const r = await fetch('/api/status');
+      const d = await r.json();
+
+      // Clock
+      document.getElementById('clock').textContent = d.time.split(' ')[1];
+      document.getElementById('dow').textContent   = d.dow;
+      document.getElementById('deviceName').textContent = d.deviceName || 'CCRP Controller';
+
+      // Peak
+      const isPeak = d.peak;
+      const peakDot   = document.getElementById('peakDot');
+      const peakLabel = document.getElementById('peakLabel');
+      const peakSub   = document.getElementById('peakSub');
+
+      peakDot.style.background  = isPeak ? 'var(--peak)'    : 'var(--offpeak)';
+      peakDot.style.color       = isPeak ? 'var(--peak)'    : 'var(--offpeak)';
+      peakLabel.textContent     = isPeak ? 'On Peak'        : 'Off Peak';
+      peakLabel.style.color     = isPeak ? 'var(--peak)'    : 'var(--offpeak)';
+      peakSub.textContent       = isPeak ? '5:00 PM – 10:00 PM window active' : 'Charging at off-peak rate';
+
+      // Setback
+      setbackState = d.setback;
+      const sb = document.getElementById('setbackLabel');
+      sb.textContent  = d.setback ? 'Active' : 'Inactive';
+      sb.style.color  = d.setback ? 'var(--setback)' : 'var(--dim)';
+
+      // System
+      document.getElementById('ntpStatus').textContent = d.ntpSynced ? '✓ Synced' : '✗ No Sync';
+      document.getElementById('ntpStatus').style.color = d.ntpSynced ? 'var(--offpeak)' : 'var(--peak)';
+      document.getElementById('rtcTemp').textContent   = d.rtcTemp ? d.rtcTemp.toFixed(1) + ' °C' : '—';
+      document.getElementById('ntpStatus').title = d.tz || '';
+
+      // Override button
+      document.getElementById('overrideBtn').disabled = d.overrideBusy;
+      document.getElementById('overrideBtn').textContent = d.overrideBusy ? 'Override Active...' : 'Send Override Pulse';
+
+    } catch(e) {
+      console.warn('Status fetch failed:', e);
+    }
+  }
+
+  async function toggleSetback() {
+    document.getElementById('setbackBtn').disabled = true;
+    try {
+      const r = await fetch('/api/setback', { method: 'POST' });
+      const d = await r.json();
+      showToast(d.setback ? 'Setback enabled' : 'Setback disabled');
+      fetchStatus();
+    } catch(e) {
+      showToast('Request failed');
+    }
+    document.getElementById('setbackBtn').disabled = false;
+  }
+
+  async function fireOverride() {
+    const zone = document.getElementById('zoneSelect').value;
+    const btn  = document.getElementById('overrideBtn');
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    try {
+      const r = await fetch('/api/override', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'zone=' + zone
+      });
+      const d = await r.json();
+      showToast(d.ok ? 'Override pulse sent' : ('Error: ' + (d.error || 'unknown')));
+    } catch(e) {
+      showToast('Request failed');
+    }
+    setTimeout(fetchStatus, 700);
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  // Poll every 5 seconds
+  fetchStatus();
+  setInterval(fetchStatus, 5000);
+</script>
+</body>
+</html>
