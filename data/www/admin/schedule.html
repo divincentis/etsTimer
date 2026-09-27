@@ -3,13 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Schedule — Admin</title>
+<link rel="icon" href="data:,">
+<title>Admin — CCRP Controller</title>
 <style>
   :root {
     --bg:      #0d0f12;
     --surface: #161a20;
     --border:  #2a2f38;
     --accent:  #e8a020;
+    --peak:    #e84040;
     --offpeak: #30c060;
     --dim:     #5a6070;
     --text:    #c8cdd8;
@@ -25,7 +27,7 @@
     font-family: var(--sans);
     min-height: 100vh;
     padding: 16px;
-    max-width: 480px;
+    max-width: 640px;
     margin: 0 auto;
   }
 
@@ -70,70 +72,6 @@
     margin-bottom: 16px;
   }
 
-  .field-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 14px;
-  }
-
-  .field-row:last-child { margin-bottom: 0; }
-
-  label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    color: var(--text);
-    flex: 1;
-  }
-
-  .field-hint {
-    font-family: var(--mono);
-    font-size: 0.65rem;
-    color: var(--dim);
-    margin-top: 2px;
-  }
-
-  input[type="time"] {
-    font-family: var(--mono);
-    font-size: 0.85rem;
-    background: var(--bg);
-    color: var(--text);
-    border: 1px solid var(--border);
-    padding: 7px 10px;
-    border-radius: 3px;
-    width: 130px;
-    text-align: right;
-  }
-
-  input:focus { outline: 1px solid var(--accent); }
-
-  input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    accent-color: var(--offpeak);
-    cursor: pointer;
-  }
-
-  .btn {
-    font-family: var(--sans);
-    font-size: 0.8rem;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    background: var(--accent);
-    border: none;
-    color: #000;
-    padding: 10px 20px;
-    border-radius: 3px;
-    cursor: pointer;
-    width: 100%;
-    transition: background 0.15s;
-  }
-
-  .btn:hover { background: #f0b030; }
-  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
   .notice {
     font-family: var(--mono);
     font-size: 0.68rem;
@@ -146,16 +84,149 @@
     line-height: 1.6;
   }
 
-  .tz-badge {
+  .notice b { color: var(--offpeak); font-weight: normal; }
+
+  /* ── Day editor ── */
+  .day {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 10px;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+  }
+  .day:first-of-type { border-top: none; padding-top: 0; }
+
+  .day-name {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text);
+    padding-top: 8px;
+  }
+
+  .windows { display: flex; flex-direction: column; gap: 6px; }
+
+  .window {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--dim);
+  }
+
+  .off-peak-note {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--offpeak);
+    padding-top: 8px;
+  }
+
+  .overnight { color: var(--accent); }
+
+  input[type="time"] {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 6px 8px;
+    border-radius: 3px;
+    color-scheme: dark;
+  }
+
+  input:focus { outline: 1px solid var(--accent); }
+
+  .icon-btn {
+    font-family: var(--mono);
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    border-radius: 3px;
+    width: 26px;
+    height: 26px;
+    cursor: pointer;
+  }
+  .icon-btn:hover { color: var(--peak); border-color: var(--peak); }
+
+  .link-btn {
+    align-self: flex-start;
     font-family: var(--mono);
     font-size: 0.68rem;
-    color: var(--offpeak);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 10px 12px;
+    background: none;
+    border: none;
+    color: var(--dim);
+    cursor: pointer;
+    padding: 2px 0;
+  }
+  .link-btn:hover { color: var(--accent); }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 16px;
   }
+
+  .btn {
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: #000;
+    padding: 10px 20px;
+    border-radius: 3px;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.15s;
+  }
+
+  .btn:hover { background: #f0b030; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--border);
+    width: auto;
+    font-size: 0.68rem;
+    padding: 6px 12px;
+  }
+  .btn-ghost:hover { background: transparent; border-color: var(--accent); color: var(--accent); }
+
+  .btn-danger { background: transparent; color: var(--peak); border-color: var(--peak); }
+  .btn-danger:hover { background: var(--peak); color: #000; }
+
+  /* ── Preview (same as dashboard) ── */
+  .week { display: grid; gap: 5px; }
+  .day-row { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 8px; }
+  .day-row .day-name { font-size: 0.65rem; color: var(--dim); padding: 0; }
+  .bar { position: relative; height: 12px; background: rgba(48, 192, 96, 0.14); border-radius: 2px; overflow: hidden; }
+  .seg { position: absolute; top: 0; bottom: 0; background: var(--peak); opacity: 0.8; }
+  .ticks { display: grid; grid-template-columns: 34px 1fr; gap: 8px; margin-top: 2px; }
+  .ticks div:last-child { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.6rem; color: var(--dim); }
+
+  /* ── Firmware ── */
+  input[type="file"] {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--dim);
+    margin-bottom: 12px;
+    width: 100%;
+  }
+
+  progress {
+    width: 100%;
+    height: 6px;
+    margin-bottom: 12px;
+    accent-color: var(--accent);
+    display: none;
+  }
+
+  .row { display: flex; gap: 10px; }
 
   #toast {
     position: fixed;
@@ -172,6 +243,7 @@
     opacity: 0;
     transition: opacity 0.3s;
     pointer-events: none;
+    max-width: 90vw;
   }
   #toast.show { opacity: 1; }
 </style>
@@ -179,125 +251,278 @@
 <body>
 
 <header>
-  <h1>Schedule — Admin</h1>
+  <h1>Admin</h1>
   <a class="back" href="/">‹ Dashboard</a>
 </header>
 
-<div class="notice">
-  Changes take effect immediately and persist through reboots.
-  Peak window applies Monday through Saturday. Sunday is always off-peak.
+<div class="notice" id="tzNote">
+  Times are local wall-clock time. Timezone and DST come from the firmware
+  (<code>POSIX_TZ_STRING</code>). Changes take effect immediately and survive reboots.
 </div>
 
-<div class="tz-badge" id="tzBadge">
-  Timezone: Mountain Time (MST/MDT) — DST handled automatically
+<!-- Schedule editor -->
+<div class="card">
+  <div class="card-label">Peak Windows</div>
+  <div class="toolbar">
+    <button class="btn btn-ghost" onclick="copyMonday()">Copy Mon → Tue–Sat</button>
+    <button class="btn btn-ghost" onclick="loadDefaults()">MPEI default</button>
+    <button class="btn btn-ghost" onclick="clearAll()">Clear all</button>
+  </div>
+  <div id="editor"></div>
 </div>
 
 <div class="card">
-  <div class="card-label">Peak Window — Mon through Sat</div>
-
-  <div class="field-row">
-    <div>
-      <label>Peak Start</label>
-      <div class="field-hint">Default: 5:00 PM</div>
-    </div>
-    <input type="time" id="startTime" value="17:00">
-  </div>
-
-  <div class="field-row">
-    <div>
-      <label>Peak End</label>
-      <div class="field-hint">Default: 10:00 PM</div>
-    </div>
-    <input type="time" id="endTime" value="22:00">
-  </div>
+  <div class="card-label">Preview</div>
+  <div class="week" id="preview"></div>
+  <div class="ticks"><div></div><div><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>
 </div>
 
+<button class="btn" id="saveBtn" onclick="saveSchedule()" style="margin-bottom:24px">Save Schedule</button>
+
+<!-- Firmware -->
 <div class="card">
-  <div class="card-label">Sunday</div>
-  <div class="field-row">
-    <label>Always Off-Peak</label>
-    <input type="checkbox" id="sundayOffPeak" checked>
+  <div class="card-label">Firmware Update</div>
+  <div class="notice" style="margin-bottom:12px">
+    Upload <code>.pio/build/esp32dev/firmware.bin</code>. The device reboots when done;
+    relays drop out for a few seconds. Current version: <span id="fwVersion">—</span>
+  </div>
+  <input type="file" id="fwFile" accept=".bin">
+  <progress id="fwProgress" max="100" value="0"></progress>
+  <div class="row">
+    <button class="btn" id="fwBtn" onclick="uploadFirmware()">Upload &amp; Install</button>
+    <button class="btn btn-danger" style="width:auto" onclick="reboot()">Reboot</button>
   </div>
 </div>
-
-<button class="btn" id="saveBtn" onclick="saveSchedule()">Save Schedule</button>
 
 <div id="toast"></div>
 
 <script>
-  async function loadSchedule() {
-    try {
-      const r = await fetch('/admin/api/schedule');
-      if (r.status === 401) return;
-      const d = await r.json();
+  const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  const DAY_NAMES = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
+  const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  const MAX_WINDOWS = 4;
+  const $ = id => document.getElementById(id);
 
-      const sh = String(d.monSat.startHour).padStart(2,'0');
-      const sm = String(d.monSat.startMinute).padStart(2,'0');
-      const eh = String(d.monSat.endHour).padStart(2,'0');
-      const em = String(d.monSat.endMinute).padStart(2,'0');
+  let days = Object.fromEntries(DAYS.map(d => [d, []]));
 
-      document.getElementById('startTime').value        = sh + ':' + sm;
-      document.getElementById('endTime').value          = eh + ':' + em;
-      document.getElementById('sundayOffPeak').checked  = d.sundayAlwaysOffPeak;
-    } catch(e) {
-      console.warn('Failed to load schedule:', e);
+  const toMin = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+
+  function defaults() {
+    const d = Object.fromEntries(DAYS.map(k => [k, []]));
+    for (const k of ['mon', 'tue', 'wed', 'thu', 'fri', 'sat']) d[k] = [{ start: '17:00', end: '22:00' }];
+    return d;
+  }
+
+  function showToast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  // ── Editor ───────────────────────────────────────────────────────────────
+  function render() {
+    const editor = $('editor');
+    editor.replaceChildren();
+
+    for (const key of ORDER) {
+      const row = document.createElement('div');
+      row.className = 'day';
+
+      const name = document.createElement('div');
+      name.className = 'day-name';
+      name.textContent = DAY_NAMES[key];
+
+      const list = document.createElement('div');
+      list.className = 'windows';
+
+      if (days[key].length === 0) {
+        const note = document.createElement('div');
+        note.className = 'off-peak-note';
+        note.textContent = 'Off-peak all day';
+        list.appendChild(note);
+      }
+
+      days[key].forEach((w, i) => {
+        const line = document.createElement('div');
+        line.className = 'window';
+
+        const start = timeInput(w.start, v => { w.start = v; update(); });
+        const end   = timeInput(w.end,   v => { w.end = v;   update(); });
+        const hint  = document.createElement('span');
+        const remove = document.createElement('button');
+        remove.className = 'icon-btn';
+        remove.textContent = '×';
+        remove.title = 'Remove window';
+        remove.onclick = () => { days[key].splice(i, 1); render(); };
+
+        const update = () => {
+          const s = toMin(w.start), e = toMin(w.end);
+          hint.textContent = s === e ? '⚠ zero length' : e === 0 ? '→ midnight' : e < s ? '→ next day' : '';
+          hint.className = e < s ? 'overnight' : '';
+          renderPreview();
+        };
+        update();
+
+        line.append(start, '–', end, remove, hint);
+        list.appendChild(line);
+      });
+
+      if (days[key].length < MAX_WINDOWS) {
+        const add = document.createElement('button');
+        add.className = 'link-btn';
+        add.textContent = '+ add peak window';
+        add.onclick = () => { days[key].push({ start: '17:00', end: '22:00' }); render(); };
+        list.appendChild(add);
+      }
+
+      row.append(name, list);
+      editor.appendChild(row);
+    }
+    renderPreview();
+  }
+
+  function timeInput(value, onChange) {
+    const input = document.createElement('input');
+    input.type = 'time';
+    input.value = value;
+    input.required = true;
+    input.onchange = () => { if (input.value) onChange(input.value); };
+    return input;
+  }
+
+  function renderPreview() {
+    const preview = $('preview');
+    preview.replaceChildren();
+    for (const key of ORDER) {
+      const dow = DAYS.indexOf(key);
+      const row = document.createElement('div');
+      row.className = 'day-row';
+      const name = document.createElement('div');
+      name.className = 'day-name';
+      name.textContent = key;
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+
+      const segs = [];
+      for (const w of days[key]) {
+        const s = toMin(w.start), e = toMin(w.end);
+        if (s !== e) segs.push([s, e > s ? e : 1440]);
+      }
+      for (const w of days[DAYS[(dow + 6) % 7]]) {
+        const s = toMin(w.start), e = toMin(w.end);
+        if (e < s && e > 0) segs.push([0, e]);
+      }
+      for (const [s, e] of segs) {
+        const seg = document.createElement('div');
+        seg.className = 'seg';
+        seg.style.left = (s / 14.4) + '%';
+        seg.style.width = ((e - s) / 14.4) + '%';
+        bar.appendChild(seg);
+      }
+      row.append(name, bar);
+      preview.appendChild(row);
     }
   }
 
-  async function loadTzStatus() {
+  function copyMonday() {
+    for (const k of ['tue', 'wed', 'thu', 'fri', 'sat']) days[k] = days.mon.map(w => ({ ...w }));
+    render();
+  }
+
+  function loadDefaults() { days = defaults(); render(); }
+  function clearAll() { days = Object.fromEntries(DAYS.map(d => [d, []])); render(); }
+
+  // ── Server ───────────────────────────────────────────────────────────────
+  async function loadSchedule() {
     try {
-      const r = await fetch('/api/status');
-      const d = await r.json();
-      if (d.tz) {
-        document.getElementById('tzBadge').textContent =
-          'Timezone: Mountain Time — currently ' + d.tz + ' (DST handled automatically)';
+      const d = await fetch('/api/schedule').then(r => r.json());
+      days = d.days;
+      render();
+    } catch (e) {
+      showToast('Failed to load schedule');
+    }
+    try {
+      const s = await fetch('/api/status').then(r => r.json());
+      $('fwVersion').textContent = 'v' + s.firmware;
+      if (s.time.valid) {
+        $('tzNote').replaceChildren(
+          'Times are local wall-clock time — device is currently on ',
+          Object.assign(document.createElement('b'), { textContent: s.time.tz }),
+          ' (DST handled automatically). Changes take effect immediately and survive reboots.');
       }
-    } catch(e) {}
+    } catch (e) {}
   }
 
   async function saveSchedule() {
-    const btn = document.getElementById('saveBtn');
+    for (const k of DAYS) {
+      if (days[k].some(w => w.start === w.end)) return showToast(`${DAY_NAMES[k]}: a window has the same start and end`);
+    }
+
+    const btn = $('saveBtn');
     btn.disabled = true;
     btn.textContent = 'Saving...';
-
-    const [startH, startM] = document.getElementById('startTime').value.split(':').map(Number);
-    const [endH,   endM]   = document.getElementById('endTime').value.split(':').map(Number);
-
-    const payload = {
-      monSat: {
-        startHour:   startH,
-        startMinute: startM,
-        endHour:     endH,
-        endMinute:   endM
-      },
-      sundayAlwaysOffPeak: document.getElementById('sundayOffPeak').checked
-    };
-
     try {
       const r = await fetch('/admin/api/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ days })
       });
-      const d = await r.json();
-      showToast(d.ok ? 'Schedule saved' : 'Save failed');
-    } catch(e) {
+      const d = await r.json().catch(() => ({}));
+      showToast(r.ok && d.ok ? 'Schedule saved' : 'Save failed: ' + (d.error || 'HTTP ' + r.status));
+    } catch (e) {
       showToast('Request failed');
     }
-
     btn.disabled = false;
     btn.textContent = 'Save Schedule';
   }
 
-  function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2500);
+  function uploadFirmware() {
+    const file = $('fwFile').files[0];
+    if (!file) return showToast('Choose a firmware .bin first');
+    if (!confirm(`Install ${file.name} (${Math.round(file.size / 1024)} KB) and reboot?`)) return;
+
+    const btn = $('fwBtn');
+    const bar = $('fwProgress');
+    btn.disabled = true;
+    bar.style.display = 'block';
+    bar.value = 0;
+
+    const form = new FormData();
+    form.append('firmware', file, file.name);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/admin/api/firmware');
+    xhr.setRequestHeader('X-ETS-Request', '1');
+    xhr.upload.onprogress = e => { if (e.lengthComputable) bar.value = (e.loaded / e.total) * 100; };
+    xhr.onload = () => {
+      let d = {};
+      try { d = JSON.parse(xhr.responseText); } catch (e) {}
+      if (xhr.status === 200 && d.ok) {
+        showToast('Installed — rebooting...');
+        setTimeout(() => location.href = '/', 8000);
+      } else {
+        showToast('Update failed: ' + (d.error || 'HTTP ' + xhr.status));
+        btn.disabled = false;
+      }
+    };
+    xhr.onerror = () => { showToast('Upload failed'); btn.disabled = false; };
+    xhr.send(form);
+  }
+
+  async function reboot() {
+    if (!confirm('Reboot the controller? Relays drop out for a few seconds.')) return;
+    try {
+      await fetch('/admin/api/reboot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      showToast('Rebooting...');
+      setTimeout(() => location.href = '/', 8000);
+    } catch (e) {
+      showToast('Request failed');
+    }
   }
 
   loadSchedule();
-  loadTzStatus();
 </script>
 </body>
 </html>

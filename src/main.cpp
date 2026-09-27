@@ -1,98 +1,85 @@
 #include <Arduino.h>
+#include <ESPmDNS.h>
 #include <WiFi.h>
-#include <LittleFS.h>
+#include <atomic>
 #include <esp_task_wdt.h>
 
 #include "config.h"
-#include "TimeManager.h"
-#include "ScheduleManager.h"
-#include "RelayController.h"
+#include "Controller.h"
+#include "EventLog.h"
 #include "WebUI.h"
 
-TimeManager     timeMgr;
-ScheduleManager sched;
-RelayController relay;
-WebUI           webUI;
+EventLog   eventLog;
+Controller controller;
+WebUI      webUI;
 
 // ── WiFi ─────────────────────────────────────────────────────────────────────
-void connectWifi() {
-    Serial.printf("[WiFi] Connecting to %s", WIFI_SSID);
+// Non-blocking: the schedule runs from the RTC whether or not WiFi is up.
+// Events arrive on the WiFi event task; they're handled in loop().
+static std::atomic<bool> s_wifiGotIp{false};
+static std::atomic<bool> s_wifiLost{false};
+
+void startWifi() {
+    WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t) {
+        if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP)       s_wifiGotIp = true;
+        if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) s_wifiLost  = true;
+    });
+    WiFi.setHostname(DEVICE_HOSTNAME);  // must precede WiFi.mode() on core 2.x
     WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    eventLog.add("WiFi connecting to %s", WIFI_SSID);
+}
 
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-        delay(500);
-        Serial.print(".");
-        attempts++;
+void wifiLoop() {
+    static bool wasConnected = false;
+    static bool mdnsStarted  = false;
+    static unsigned long lastReconnectAttempt = 0;
+
+    if (s_wifiGotIp.exchange(false)) {
+        wasConnected = true;
+        eventLog.add("WiFi connected: %s (RSSI %d dBm)",
+                     WiFi.localIP().toString().c_str(), WiFi.RSSI());
+        controller.startNtp();
+        if (!mdnsStarted && MDNS.begin(DEVICE_HOSTNAME)) {
+            MDNS.addService("http", "tcp", 80);
+            mdnsStarted = true;
+        }
     }
-    Serial.println();
 
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("[WiFi] Connected. IP: %s\n", WiFi.localIP().toString().c_str());
-    } else {
-        Serial.println("[WiFi] Connection failed — running offline with RTC");
+    if (s_wifiLost.exchange(false) && wasConnected) {
+        wasConnected = false;
+        eventLog.add("WiFi disconnected - running on RTC");
+    }
+
+    // Belt and braces: the core's auto-reconnect occasionally gives up.
+    if (!WiFi.isConnected() && millis() - lastReconnectAttempt > 30000UL) {
+        lastReconnectAttempt = millis();
+        WiFi.reconnect();
     }
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
-    delay(500);
-    Serial.println("\n[Boot] Steffes CCRP Controller starting...");
+    eventLog.begin();
+    eventLog.add("Boot: %s v%s (reset: %s)", DEVICE_NAME, FIRMWARE_VERSION,
+                 Controller::resetReasonName(esp_reset_reason()));
 
-    // Hardware watchdog — 30s timeout, resets ESP32 if loop() hangs
-    // This also releases the NC watchdog relay, lighting the fault LED
-    esp_task_wdt_init(30, true);
+    // Hardware watchdog — resets the ESP32 if loop() hangs. While it is
+    // down, relay 7 drops out and the fault LED lights.
+    esp_task_wdt_init(TASK_WDT_TIMEOUT_S, true);
     esp_task_wdt_add(NULL);
 
-    // Filesystem
-    if (!LittleFS.begin(true)) {
-        Serial.println("[Boot] LittleFS mount failed!");
-    } else {
-        Serial.println("[Boot] LittleFS mounted");
-    }
-
-    // Hardware init
-    relay.begin();       // Energizes watchdog relay (relay 7) — LED goes dark
-    timeMgr.begin();     // RTC + sets POSIX TZ for DST
-    sched.begin();       // Load schedule from LittleFS
-
-    // Network
-    connectWifi();
-
-    // NTP sync if WiFi available — no offset arg needed, TZ handles it
-    if (WiFi.status() == WL_CONNECTED) {
-        timeMgr.syncNTP();
-    }
-
-    // Web server
-    webUI.begin(sched, relay, timeMgr);
-
-    Serial.println("[Boot] Ready.");
+    controller.begin();  // relays (watchdog relay on), RTC, saved schedule
+    startWifi();
+    webUI.begin(controller);
 }
 
 // ── Loop ──────────────────────────────────────────────────────────────────────
 void loop() {
-    // Kick hardware watchdog — if this stops, ESP32 resets, relay 7 drops, LED lights
     esp_task_wdt_reset();
-
-    // Periodic NTP re-sync
-    timeMgr.loop();
-
-    // Evaluate schedule against DST-correct local time, drive relay 1
-    DateTime localNow = timeMgr.nowLocal();
-    relay.setPeak(sched.isPeak(localNow));
-
-    // WiFi watchdog — reconnect if dropped
-    if (WiFi.status() != WL_CONNECTED) {
-        static unsigned long lastReconnectAttempt = 0;
-        if (millis() - lastReconnectAttempt > 30000) {
-            Serial.println("[WiFi] Reconnecting...");
-            WiFi.reconnect();
-            lastReconnectAttempt = millis();
-        }
-    }
-
-    delay(1000); // 1s tick — plenty for schedule granularity
+    controller.loop();   // clock upkeep, override sequencing, schedule → relay 1
+    wifiLoop();
+    delay(10);           // 10 ms tick keeps the override pulse timing tight
 }

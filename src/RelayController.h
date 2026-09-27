@@ -2,116 +2,109 @@
 
 #include <Arduino.h>
 #include "config.h"
+#include "EventLog.h"
+#include "OverrideSequencer.h"
 
+enum RelayId : uint8_t {
+    RELAY_PEAK = 0,
+    RELAY_SETBACK,
+    RELAY_OVERRIDE,
+    RELAY_SEL_RL1,
+    RELAY_SEL_RL23,
+    RELAY_SEL_RL789,
+    RELAY_WATCHDOG,
+    RELAY_COUNT
+};
+
+struct RelayInfo {
+    uint8_t     pin;
+    const char* id;     // stable key for the API
+    const char* label;  // shown in the UI
+};
+
+static const RelayInfo RELAYS[RELAY_COUNT] = {
+    { PIN_RELAY_1_PEAK,      "peak",     "Peak"      },
+    { PIN_RELAY_2_SETBACK,   "setback",  "Setback"   },
+    { PIN_RELAY_3_OVERRIDE,  "override", "Override"  },
+    { PIN_RELAY_4_SEL_RL1,   "selRl1",   "Sel RL1"   },
+    { PIN_RELAY_5_SEL_RL23,  "selRl23",  "Sel RL2,3" },
+    { PIN_RELAY_6_SEL_RL789, "selRl789", "Sel RL7-9" },
+    { PIN_RELAY_7_WATCHDOG,  "watchdog", "Watchdog"  },
+};
+
+// Override zone → selector relay
+static const RelayId ZONE_SELECTOR[ets::OVERRIDE_ZONE_COUNT] = {
+    RELAY_SEL_RL1, RELAY_SEL_RL23, RELAY_SEL_RL789
+};
+static const char* const ZONE_LABELS[ets::OVERRIDE_ZONE_COUNT] = {
+    "RL1", "RL2, RL3", "RL7, RL8, RL9"
+};
+
+// Owns the GPIOs. Only touched from the loop task.
 class RelayController {
 public:
-    bool peakActive    = false;
-    bool setbackActive = false;
-    bool overrideBusy  = false;
-
-    // Track selector state for status reporting
-    int  lastOverrideZone = -1;
-
     void begin() {
-        // Watchdog relay — energize first, before anything else
-        // NC contact opens, LED goes dark = healthy
-        pinMode(PIN_RELAY_7_WATCHDOG, OUTPUT);
-        digitalWrite(PIN_RELAY_7_WATCHDOG, RELAY_ON);
-        pinMode(PIN_RELAY_1_PEAK,      OUTPUT);
-        pinMode(PIN_RELAY_2_SETBACK,   OUTPUT);
-        pinMode(PIN_RELAY_3_OVERRIDE,  OUTPUT);
-        pinMode(PIN_RELAY_4_SEL_RL1,   OUTPUT);
-        pinMode(PIN_RELAY_5_SEL_RL23,  OUTPUT);
-        pinMode(PIN_RELAY_6_SEL_RL789, OUTPUT);
-
-        // Start all relays off
-        allOff();
-        Serial.println("[Relay] Initialized, all relays OFF");
+        // Latch the OFF level before switching each pin to output so no
+        // relay glitches on at boot.
+        for (const RelayInfo& r : RELAYS) {
+            digitalWrite(r.pin, RELAY_OFF);
+            pinMode(r.pin, OUTPUT);
+        }
+        // Watchdog relay: energised while healthy. Its NC contact opens and
+        // the fault LED goes dark. If the ESP32 hangs or resets it drops out.
+        write(RELAY_WATCHDOG, true);
     }
 
-    void allOff() {
-        digitalWrite(PIN_RELAY_1_PEAK,      RELAY_OFF);
-        digitalWrite(PIN_RELAY_2_SETBACK,   RELAY_OFF);
-        digitalWrite(PIN_RELAY_3_OVERRIDE,  RELAY_OFF);
-        digitalWrite(PIN_RELAY_4_SEL_RL1,   RELAY_OFF);
-        digitalWrite(PIN_RELAY_5_SEL_RL23,  RELAY_OFF);
-        digitalWrite(PIN_RELAY_6_SEL_RL789, RELAY_OFF);
-    }
+    bool get(RelayId id) const { return _state[id]; }
 
     void setPeak(bool active) {
-        if (peakActive == active) return;
-        peakActive = active;
-        digitalWrite(PIN_RELAY_1_PEAK, active ? RELAY_ON : RELAY_OFF);
-        Serial.printf("[Relay] Peak: %s\n", active ? "ON" : "OFF");
+        if (write(RELAY_PEAK, active)) {
+            eventLog.add("Peak relay %s", active ? "ON (peak)" : "OFF (off-peak)");
+        }
     }
 
     void setSetback(bool active) {
-        if (setbackActive == active) return;
-        setbackActive = active;
-        digitalWrite(PIN_RELAY_2_SETBACK, active ? RELAY_ON : RELAY_OFF);
-        Serial.printf("[Relay] Setback: %s\n", active ? "ON" : "OFF");
+        if (write(RELAY_SETBACK, active)) {
+            eventLog.add("Setback %s", active ? "ON" : "OFF");
+        }
     }
 
-    // Fire override pulse for the given zone
-    // Blocking call — runs in ~600ms total
-    bool fireOverride(int zone) {
-        if (overrideBusy) {
-            Serial.println("[Relay] Override already in progress, ignoring");
-            return false;
-        }
-
-        overrideBusy = true;
-        lastOverrideZone = zone;
-
-        uint8_t selectorPin = selectorPinForZone(zone);
-        if (selectorPin == 0) {
-            Serial.printf("[Relay] Unknown zone: %d\n", zone);
-            overrideBusy = false;
-            return false;
-        }
-
-        Serial.printf("[Relay] Override zone %d — selector closing\n", zone);
-
-        // Step 1: Close selector
-        digitalWrite(selectorPin, RELAY_ON);
-        delay(OVERRIDE_SELECTOR_SETTLE_MS);
-
-        // Step 2: Pulse override relay
-        Serial.println("[Relay] Override pulse ON");
-        digitalWrite(PIN_RELAY_3_OVERRIDE, RELAY_ON);
-        delay(OVERRIDE_PULSE_MS);
-        digitalWrite(PIN_RELAY_3_OVERRIDE, RELAY_OFF);
-        Serial.println("[Relay] Override pulse OFF");
-
-        // Step 3: Release selector
-        delay(OVERRIDE_SELECTOR_SETTLE_MS);
-        digitalWrite(selectorPin, RELAY_OFF);
-        Serial.println("[Relay] Selector open");
-
-        overrideBusy = false;
+    bool startOverride(uint8_t zone) {
+        if (!_override.start(zone, millis())) return false;
+        _lastOverrideZone = zone;
+        eventLog.add("Override pulse: zone %s", ZONE_LABELS[zone]);
+        applyOverride();
         return true;
     }
 
-    // Return status as JSON string
-    String statusJson() {
-        char buf[256];
-        snprintf(buf, sizeof(buf),
-            "{\"peak\":%s,\"setback\":%s,\"overrideBusy\":%s,\"lastOverrideZone\":%d}",
-            peakActive    ? "true" : "false",
-            setbackActive ? "true" : "false",
-            overrideBusy  ? "true" : "false",
-            lastOverrideZone
-        );
-        return String(buf);
+    bool overrideBusy()     const { return _override.busy(); }
+    int  lastOverrideZone() const { return _lastOverrideZone; }
+
+    // Call often (every loop pass) to advance the override sequence.
+    void loop() {
+        if (!_override.busy()) return;
+        _override.tick(millis());
+        applyOverride();
     }
 
 private:
-    uint8_t selectorPinForZone(int zone) {
-        switch (zone) {
-            case 0: return PIN_RELAY_4_SEL_RL1;
-            case 1: return PIN_RELAY_5_SEL_RL23;
-            case 2: return PIN_RELAY_6_SEL_RL789;
-            default: return 0;
+    bool _state[RELAY_COUNT] = {};
+    int  _lastOverrideZone   = -1;
+    ets::OverrideSequencer _override{{ OVERRIDE_SELECTOR_SETTLE_MS, OVERRIDE_PULSE_MS }};
+
+    // Returns true if the state changed.
+    bool write(RelayId id, bool on) {
+        if (_state[id] == on) return false;
+        _state[id] = on;
+        digitalWrite(RELAYS[id].pin, on ? RELAY_ON : RELAY_OFF);
+        return true;
+    }
+
+    void applyOverride() {
+        int8_t zone = _override.selectorZone();
+        for (uint8_t z = 0; z < ets::OVERRIDE_ZONE_COUNT; z++) {
+            write(ZONE_SELECTOR[z], z == zone);
         }
+        write(RELAY_OVERRIDE, _override.pulseActive());
     }
 };

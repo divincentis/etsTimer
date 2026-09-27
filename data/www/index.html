@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
 <title>Steffes CCRP Controller</title>
 <style>
   :root {
@@ -27,6 +28,8 @@
     font-family: var(--sans);
     min-height: 100vh;
     padding: 16px;
+    max-width: 720px;
+    margin: 0 auto;
   }
 
   header {
@@ -46,14 +49,36 @@
     color: var(--accent);
   }
 
+  .sub-head {
+    font-size: 0.7rem;
+    color: var(--dim);
+    margin-top: 2px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
   #clock {
     font-family: var(--mono);
-    font-size: 0.85rem;
-    color: var(--dim);
+    font-size: 1.1rem;
+    color: var(--text);
     text-align: right;
   }
 
-  #dow { color: var(--text); font-size: 0.75rem; }
+  #clockSub { font-size: 0.65rem; color: var(--dim); }
+
+  /* ── Banner ── */
+  .banner {
+    display: none;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    line-height: 1.5;
+    border: 1px solid var(--peak);
+    color: var(--peak);
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+  }
+  .banner.show { display: block; }
 
   /* ── Main Status ── */
   .status-card {
@@ -72,6 +97,8 @@
     height: 18px;
     border-radius: 50%;
     flex-shrink: 0;
+    background: var(--dim);
+    color: var(--dim);
     box-shadow: 0 0 12px currentColor;
   }
 
@@ -85,10 +112,12 @@
 
   .status-sub {
     font-family: var(--mono);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: var(--dim);
-    margin-top: 4px;
+    margin-top: 6px;
   }
+
+  #countdown { color: var(--text); }
 
   /* ── Grid ── */
   .grid {
@@ -107,12 +136,93 @@
     padding: 16px;
   }
 
+  .card.wide { margin-bottom: 16px; }
+
   .card-label {
     font-size: 0.7rem;
     letter-spacing: 0.15em;
     text-transform: uppercase;
     color: var(--dim);
     margin-bottom: 10px;
+  }
+
+  /* ── Week timeline ── */
+  .week { display: grid; gap: 5px; }
+
+  .day-row {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .day-name {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--dim);
+    text-transform: uppercase;
+  }
+
+  .day-row.today .day-name { color: var(--accent); font-weight: 700; }
+
+  .bar {
+    position: relative;
+    height: 14px;
+    background: rgba(48, 192, 96, 0.14);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .day-row.today .bar { outline: 1px solid var(--border); }
+
+  .seg {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--peak);
+    opacity: 0.8;
+  }
+
+  .now {
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    width: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+  }
+
+  .ticks {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .ticks div:last-child {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--dim);
+  }
+
+  .legend {
+    display: flex;
+    gap: 14px;
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--dim);
+  }
+
+  .legend i {
+    display: inline-block;
+    width: 10px;
+    height: 8px;
+    margin-right: 5px;
+    border-radius: 1px;
+    vertical-align: middle;
   }
 
   /* ── Setback Toggle ── */
@@ -126,6 +236,7 @@
     font-size: 1.3rem;
     font-weight: 700;
     letter-spacing: 0.05em;
+    color: var(--dim);
   }
 
   .btn {
@@ -154,6 +265,21 @@
   }
   .btn-primary:hover { background: #f0b030; border-color: #f0b030; color: #000; }
 
+  /* ── System ── */
+  .kv {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    line-height: 1.8;
+    color: var(--dim);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 10px;
+  }
+  .kv span:nth-child(even) { color: var(--text); text-align: right; }
+  .good { color: var(--offpeak) !important; }
+  .bad  { color: var(--peak) !important; }
+  .warn { color: var(--accent) !important; }
+
   /* ── Override ── */
   .zone-select {
     font-family: var(--mono);
@@ -173,9 +299,11 @@
   /* ── Relay Grid ── */
   .relay-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     gap: 8px;
   }
+
+  @media (max-width: 480px) { .relay-grid { grid-template-columns: repeat(4, 1fr); } }
 
   .relay-item {
     display: flex;
@@ -205,6 +333,25 @@
     line-height: 1.3;
   }
 
+  /* ── Activity ── */
+  details summary {
+    cursor: pointer;
+    list-style: none;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after { content: ' ▸'; }
+  details[open] summary::after { content: ' ▾'; }
+
+  .events {
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    line-height: 1.7;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .events div { display: grid; grid-template-columns: 110px 1fr; gap: 8px; }
+  .events .t { color: var(--dim); }
+
   /* ── Footer ── */
   footer {
     margin-top: 20px;
@@ -218,6 +365,14 @@
     font-size: 0.65rem;
     color: var(--dim);
   }
+
+  footer a {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--dim);
+    text-decoration: none;
+  }
+  footer a:hover { color: var(--accent); }
 
   /* ── Toast ── */
   #toast {
@@ -246,17 +401,35 @@
 <header>
   <div>
     <h1 id="deviceName">CCRP Controller</h1>
-    <div id="dow" style="font-size:0.7rem;color:var(--dim);margin-top:2px;letter-spacing:0.1em;text-transform:uppercase"></div>
+    <div class="sub-head" id="dow"></div>
   </div>
-  <div id="clock">--:--:--<br><span style="font-size:0.7rem"></span></div>
+  <div>
+    <div id="clock">--:--:--</div>
+    <div id="clockSub"></div>
+  </div>
 </header>
+
+<div class="banner" id="banner"></div>
 
 <!-- Peak Status -->
 <div class="status-card">
-  <div class="status-indicator" id="peakDot" style="color:var(--dim);background:var(--dim)"></div>
+  <div class="status-indicator" id="peakDot"></div>
   <div>
     <div class="status-label" id="peakLabel">—</div>
-    <div class="status-sub" id="peakSub">Waiting for data...</div>
+    <div class="status-sub"><span id="countdown">Waiting for data...</span></div>
+    <div class="status-sub" id="todayWindows"></div>
+  </div>
+</div>
+
+<!-- Week at a glance -->
+<div class="card wide">
+  <div class="card-label">This Week</div>
+  <div class="week" id="week"></div>
+  <div class="ticks"><div></div><div><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>
+  <div class="legend">
+    <span><i style="background:var(--peak)"></i>Peak</span>
+    <span><i style="background:rgba(48,192,96,0.4)"></i>Off-peak</span>
+    <span><i style="background:var(--accent)"></i>Now</span>
   </div>
 </div>
 
@@ -266,161 +439,344 @@
   <div class="card">
     <div class="card-label">Setback</div>
     <div class="toggle-row">
-      <div class="toggle-state" id="setbackLabel" style="color:var(--dim)">—</div>
+      <div class="toggle-state" id="setbackLabel">—</div>
       <button class="btn" id="setbackBtn" onclick="toggleSetback()">Toggle</button>
     </div>
   </div>
 
-  <!-- System Info -->
+  <!-- Override -->
   <div class="card">
-    <div class="card-label">System</div>
-    <div style="font-family:var(--mono);font-size:0.72rem;line-height:1.8;color:var(--dim)">
-      NTP <span id="ntpStatus">—</span><br>
-      RTC <span id="rtcTemp">—</span>
-    </div>
+    <div class="card-label">Override Pulse</div>
+    <select class="zone-select" id="zoneSelect"></select>
+    <button class="btn btn-primary" id="overrideBtn" onclick="fireOverride()" style="width:100%">
+      Send Override Pulse
+    </button>
   </div>
 
-</div>
-
-<!-- Override -->
-<div class="card" style="margin-bottom:16px">
-  <div class="card-label">Override Pulse</div>
-  <select class="zone-select" id="zoneSelect">
-    <option value="0">Zone — RL1</option>
-    <option value="1">Zone — RL2, RL3</option>
-    <option value="2">Zone — RL7, RL8, RL9</option>
-  </select>
-  <button class="btn btn-primary" id="overrideBtn" onclick="fireOverride()" style="width:100%">
-    Send Override Pulse
-  </button>
 </div>
 
 <!-- Relay Status -->
-<div class="card">
+<div class="card wide">
   <div class="card-label" style="margin-bottom:12px">Relay Status</div>
-  <div class="relay-grid">
-    <div class="relay-item">
-      <div class="relay-dot" id="r1"></div>
-      <div class="relay-name">RL1<br>Peak</div>
-    </div>
-    <div class="relay-item">
-      <div class="relay-dot" id="r2"></div>
-      <div class="relay-name">RL2<br>Setback</div>
-    </div>
-    <div class="relay-item">
-      <div class="relay-dot" id="r3"></div>
-      <div class="relay-name">RL3<br>Override</div>
-    </div>
-    <div class="relay-item">
-      <div class="relay-dot" id="r4"></div>
-      <div class="relay-name">RL4<br>Sel RL1</div>
-    </div>
-    <div class="relay-item">
-      <div class="relay-dot" id="r5"></div>
-      <div class="relay-name">RL5<br>Sel RL2,3</div>
-    </div>
-    <div class="relay-item">
-      <div class="relay-dot" id="r6"></div>
-      <div class="relay-name">RL6<br>Sel RL7-9</div>
-    </div>
+  <div class="relay-grid" id="relays"></div>
+</div>
+
+<!-- System -->
+<div class="card wide">
+  <div class="card-label">System</div>
+  <div class="kv">
+    <span>Time source</span> <span id="timeSource">—</span>
+    <span>Last NTP sync</span><span id="ntpSync">—</span>
+    <span>RTC</span>         <span id="rtc">—</span>
+    <span>WiFi</span>        <span id="wifi">—</span>
+    <span>Uptime</span>      <span id="uptime">—</span>
+    <span>Last reset</span>  <span id="reset">—</span>
+    <span>Firmware</span>    <span id="firmware">—</span>
   </div>
 </div>
 
+<!-- Activity -->
+<details class="card wide" id="activity">
+  <summary class="card-label" style="margin-bottom:0">Activity</summary>
+  <div class="events" id="events" style="margin-top:10px"></div>
+</details>
+
 <footer>
-  <div class="meta">Steffes CCRP Controller</div>
-  <a href="/admin/schedule.html" style="font-family:var(--mono);font-size:0.65rem;color:var(--dim);text-decoration:none">Admin ›</a>
+  <div class="meta" id="footerMeta">Steffes CCRP Controller</div>
+  <a href="/admin">Admin ›</a>
 </footer>
 
 <div id="toast"></div>
 
 <script>
-  let setbackState = false;
+  const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  const $ = id => document.getElementById(id);
 
-  async function fetchStatus() {
+  let status = null;
+  let schedule = null;
+  let clockBase = null;   // { h, m, s, at } — device time interpolated between polls
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const toMin = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+  const pad = n => String(n).padStart(2, '0');
+
+  function duration(mins) {
+    if (mins < 60) return mins + 'm';
+    const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
+    return d ? `${d}d ${h}h` : `${h}h ${pad(m)}m`;
+  }
+
+  function ago(sec) {
+    if (sec < 90) return sec + 's ago';
+    if (sec < 5400) return Math.round(sec / 60) + 'm ago';
+    if (sec < 172800) return Math.round(sec / 3600) + 'h ago';
+    return Math.round(sec / 86400) + 'd ago';
+  }
+
+  async function post(url, body) {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.ok === false) throw new Error(d.error || ('HTTP ' + r.status));
+    return d;
+  }
+
+  function showToast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  // Peak segments [start, end) in minutes for one day, including the tail of
+  // yesterday's windows that cross midnight.
+  function segmentsFor(dow) {
+    const segs = [];
+    for (const w of schedule.days[DAYS[dow]]) {
+      const s = toMin(w.start), e = toMin(w.end);
+      segs.push([s, e > s ? e : 1440]);
+    }
+    for (const w of schedule.days[DAYS[(dow + 6) % 7]]) {
+      const s = toMin(w.start), e = toMin(w.end);
+      if (e < s && e > 0) segs.push([0, e]);
+    }
+    return segs.sort((a, b) => a[0] - b[0]);
+  }
+
+  // ── Rendering ────────────────────────────────────────────────────────────
+  function renderWeek() {
+    if (!schedule) return;
+    const week = $('week');
+    week.replaceChildren();
+    const today = status && status.time.valid ? status.time.dow : -1;
+
+    // Start the week on Monday
+    for (const dow of [1, 2, 3, 4, 5, 6, 0]) {
+      const row = document.createElement('div');
+      row.className = 'day-row' + (dow === today ? ' today' : '');
+      const name = document.createElement('div');
+      name.className = 'day-name';
+      name.textContent = DAYS[dow];
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      for (const [s, e] of segmentsFor(dow)) {
+        const seg = document.createElement('div');
+        seg.className = 'seg';
+        seg.style.left = (s / 14.4) + '%';
+        seg.style.width = ((e - s) / 14.4) + '%';
+        bar.appendChild(seg);
+      }
+      if (dow === today) {
+        const now = document.createElement('div');
+        now.className = 'now';
+        now.id = 'nowMarker';
+        bar.appendChild(now);
+      }
+      row.append(name, bar);
+      week.appendChild(row);
+    }
+    placeNowMarker();
+  }
+
+  function placeNowMarker() {
+    const m = $('nowMarker');
+    if (m && clockBase) m.style.left = `calc(${(clockNow() / 86400) * 100}% - 1px)`;
+  }
+
+  function clockNow() {  // seconds since local midnight on the device
+    const elapsed = (Date.now() - clockBase.at) / 1000;
+    return (clockBase.h * 3600 + clockBase.m * 60 + clockBase.s + elapsed) % 86400;
+  }
+
+  function tickClock() {
+    if (!clockBase) return;
+    const t = Math.floor(clockNow());
+    $('clock').textContent = `${pad(Math.floor(t / 3600))}:${pad(Math.floor(t / 60) % 60)}:${pad(t % 60)}`;
+    placeNowMarker();
+  }
+
+  function renderStatus() {
+    const d = status;
+    $('deviceName').textContent = d.device;
+    document.title = d.device;
+    $('footerMeta').textContent = d.device;
+
+    // Clock
+    if (d.time.valid) {
+      const [h, m, s] = d.time.local.split('T')[1].split(':').map(Number);
+      clockBase = { h, m, s, at: Date.now() };
+      $('dow').textContent = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.time.dow];
+      $('clockSub').textContent = d.time.local.split('T')[0] + ' ' + d.time.tz;
+      tickClock();
+    } else {
+      clockBase = null;
+      $('clock').textContent = '--:--:--';
+      $('dow').textContent = 'Time not set';
+      $('clockSub').textContent = '';
+    }
+
+    // Banner
+    const problems = [];
+    if (!d.time.valid) problems.push(`Clock not set — holding ${d.peak.active ? 'PEAK' : 'OFF-PEAK'} until NTP sync. Check WiFi and the RTC battery.`);
+    else if (!d.rtc.present) problems.push('DS3231 RTC not detected — schedule will be lost on power failure without WiFi.');
+    else if (d.rtc.lostPower) problems.push('RTC lost power (replace the coin cell?) — waiting for NTP to correct it.');
+    $('banner').textContent = problems.join(' ');
+    $('banner').classList.toggle('show', problems.length > 0);
+
+    // Peak
+    const isPeak = d.peak.active;
+    const colour = isPeak ? 'var(--peak)' : 'var(--offpeak)';
+    $('peakDot').style.background = colour;
+    $('peakDot').style.color = colour;
+    $('peakLabel').textContent = isPeak ? 'On Peak' : 'Off Peak';
+    $('peakLabel').style.color = colour;
+
+    const mins = d.peak.minutesUntilChange;
+    if (d.peak.failsafe) {
+      $('countdown').textContent = 'Failsafe — time unknown';
+    } else if (mins < 0) {
+      $('countdown').textContent = isPeak ? 'Peak around the clock' : 'No peak periods scheduled';
+    } else {
+      $('countdown').textContent = (isPeak ? 'Off-peak in ' : 'Peak starts in ') + duration(mins);
+    }
+
+    if (schedule && d.time.valid) {
+      const today = schedule.days[DAYS[d.time.dow]].map(w => `${w.start}–${w.end}`);
+      $('todayWindows').textContent = today.length ? 'Today: ' + today.join(', ') : 'Today: no peak';
+    }
+
+    // Setback
+    const sb = $('setbackLabel');
+    sb.textContent = d.setback ? 'Active' : 'Inactive';
+    sb.style.color = d.setback ? 'var(--setback)' : 'var(--dim)';
+
+    // Override zones (populate once)
+    const zs = $('zoneSelect');
+    if (zs.options.length !== d.override.zones.length) {
+      zs.replaceChildren(...d.override.zones.map((z, i) => new Option('Zone — ' + z, i)));
+    }
+    const ob = $('overrideBtn');
+    ob.disabled = d.override.busy;
+    ob.textContent = d.override.busy ? 'Override Active...' : 'Send Override Pulse';
+
+    // Relays
+    const relays = $('relays');
+    if (relays.children.length !== d.relays.length) {
+      relays.replaceChildren(...d.relays.map((r, i) => {
+        const item = document.createElement('div');
+        item.className = 'relay-item';
+        const dot = document.createElement('div');
+        dot.className = 'relay-dot';
+        const name = document.createElement('div');
+        name.className = 'relay-name';
+        name.append(`RL${i + 1}`, document.createElement('br'), r.label);
+        item.append(dot, name);
+        return item;
+      }));
+    }
+    d.relays.forEach((r, i) => relays.children[i].firstChild.classList.toggle('on', r.on));
+
+    // System
+    const src = $('timeSource');
+    src.textContent = { ntp: '✓ NTP', rtc: 'RTC only', none: '✗ Not set' }[d.time.source] + (d.time.valid ? ' · ' + d.time.tz : '');
+    src.className = { ntp: 'good', rtc: 'warn', none: 'bad' }[d.time.source];
+
+    $('ntpSync').textContent = d.time.ntpAge >= 0 ? ago(d.time.ntpAge) : 'never';
+
+    const rtc = $('rtc');
+    rtc.textContent = !d.rtc.present ? '✗ Not found'
+                    : (d.rtc.lostPower ? 'Lost power' : '✓ OK') + (d.rtc.tempC != null ? ` · ${d.rtc.tempC.toFixed(1)} °C` : '');
+    rtc.className = !d.rtc.present || d.rtc.lostPower ? 'bad' : 'good';
+
+    const wifi = $('wifi');
+    wifi.textContent = d.wifi.connected ? `${d.wifi.ssid} · ${d.wifi.rssi} dBm · ${d.wifi.ip}` : '✗ Disconnected';
+    wifi.className = d.wifi.connected ? (d.wifi.rssi < -75 ? 'warn' : 'good') : 'bad';
+
+    $('uptime').textContent = duration(Math.floor(d.uptime / 60));
+    const reset = $('reset');
+    reset.textContent = d.reset;
+    reset.className = /watchdog|panic|brownout/.test(d.reset) ? 'bad' : '';
+    $('firmware').textContent = 'v' + d.firmware;
+
+    renderWeek();
+  }
+
+  function renderEvents(events) {
+    const box = $('events');
+    box.replaceChildren(...events.map(e => {
+      const row = document.createElement('div');
+      const t = document.createElement('span');
+      t.className = 't';
+      t.textContent = e.epoch
+        ? new Date(e.epoch * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : 'boot +' + e.uptime + 's';
+      const msg = document.createElement('span');
+      msg.textContent = e.text;
+      row.append(t, msg);
+      return row;
+    }));
+  }
+
+  // ── Data ─────────────────────────────────────────────────────────────────
+  async function refresh() {
     try {
-      const r = await fetch('/api/status');
-      const d = await r.json();
-
-      // Clock
-      document.getElementById('clock').textContent = d.time.split(' ')[1];
-      document.getElementById('dow').textContent   = d.dow;
-      document.getElementById('deviceName').textContent = d.deviceName || 'CCRP Controller';
-
-      // Peak
-      const isPeak = d.peak;
-      const peakDot   = document.getElementById('peakDot');
-      const peakLabel = document.getElementById('peakLabel');
-      const peakSub   = document.getElementById('peakSub');
-
-      peakDot.style.background  = isPeak ? 'var(--peak)'    : 'var(--offpeak)';
-      peakDot.style.color       = isPeak ? 'var(--peak)'    : 'var(--offpeak)';
-      peakLabel.textContent     = isPeak ? 'On Peak'        : 'Off Peak';
-      peakLabel.style.color     = isPeak ? 'var(--peak)'    : 'var(--offpeak)';
-      peakSub.textContent       = isPeak ? '5:00 PM – 10:00 PM window active' : 'Charging at off-peak rate';
-
-      // Setback
-      setbackState = d.setback;
-      const sb = document.getElementById('setbackLabel');
-      sb.textContent  = d.setback ? 'Active' : 'Inactive';
-      sb.style.color  = d.setback ? 'var(--setback)' : 'var(--dim)';
-
-      // System
-      document.getElementById('ntpStatus').textContent = d.ntpSynced ? '✓ Synced' : '✗ No Sync';
-      document.getElementById('ntpStatus').style.color = d.ntpSynced ? 'var(--offpeak)' : 'var(--peak)';
-      document.getElementById('rtcTemp').textContent   = d.rtcTemp ? d.rtcTemp.toFixed(1) + ' °C' : '—';
-      document.getElementById('ntpStatus').title = d.tz || '';
-
-      // Override button
-      document.getElementById('overrideBtn').disabled = d.overrideBusy;
-      document.getElementById('overrideBtn').textContent = d.overrideBusy ? 'Override Active...' : 'Send Override Pulse';
-
-    } catch(e) {
+      const [s, sch] = await Promise.all([
+        fetch('/api/status').then(r => r.json()),
+        schedule ? Promise.resolve(schedule) : fetch('/api/schedule').then(r => r.json())
+      ]);
+      status = s;
+      schedule = sch;
+      renderStatus();
+      if ($('activity').open) refreshEvents();
+    } catch (e) {
       console.warn('Status fetch failed:', e);
     }
   }
 
+  async function refreshEvents() {
+    try { renderEvents(await fetch('/api/events').then(r => r.json())); } catch (e) {}
+  }
+
+  // ── Actions ──────────────────────────────────────────────────────────────
   async function toggleSetback() {
-    document.getElementById('setbackBtn').disabled = true;
+    const btn = $('setbackBtn');
+    btn.disabled = true;
     try {
-      const r = await fetch('/api/setback', { method: 'POST' });
-      const d = await r.json();
-      showToast(d.setback ? 'Setback enabled' : 'Setback disabled');
-      fetchStatus();
-    } catch(e) {
-      showToast('Request failed');
+      const on = !(status && status.setback);
+      await post('/api/setback', { on });
+      showToast(on ? 'Setback enabled' : 'Setback disabled');
+      await refresh();
+    } catch (e) {
+      showToast('Failed: ' + e.message);
     }
-    document.getElementById('setbackBtn').disabled = false;
+    btn.disabled = false;
   }
 
   async function fireOverride() {
-    const zone = document.getElementById('zoneSelect').value;
-    const btn  = document.getElementById('overrideBtn');
+    const btn = $('overrideBtn');
     btn.disabled = true;
     btn.textContent = 'Sending...';
     try {
-      const r = await fetch('/api/override', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'zone=' + zone
-      });
-      const d = await r.json();
-      showToast(d.ok ? 'Override pulse sent' : ('Error: ' + (d.error || 'unknown')));
-    } catch(e) {
-      showToast('Request failed');
+      await post('/api/override', { zone: Number($('zoneSelect').value) });
+      showToast('Override pulse sent');
+    } catch (e) {
+      showToast('Failed: ' + e.message);
     }
-    setTimeout(fetchStatus, 700);
+    refresh();
+    setTimeout(refresh, 800);
   }
 
-  function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2500);
-  }
+  $('activity').addEventListener('toggle', () => { if ($('activity').open) refreshEvents(); });
 
-  // Poll every 5 seconds
-  fetchStatus();
-  setInterval(fetchStatus, 5000);
+  refresh();
+  setInterval(refresh, 5000);
+  setInterval(tickClock, 1000);
+  // Re-read the schedule occasionally in case it was edited elsewhere
+  setInterval(() => { schedule = null; }, 60000);
 </script>
 </body>
 </html>
