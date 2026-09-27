@@ -10,3 +10,7 @@
 // Uses HTTP Digest auth, so the password is never sent in the clear.
 #define ADMIN_USERNAME   "admin"
 #define ADMIN_PASSWORD   "change-me"
+
+// Optional: monitoring heartbeat, e.g. a Healthchecks.io ping URL
+// ("https://hc-ping.com/<uuid>"). Leave empty to disable.
+#define HEARTBEAT_URL    ""

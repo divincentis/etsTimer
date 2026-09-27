@@ -469,6 +469,7 @@
     <span>Last NTP sync</span><span id="ntpSync">—</span>
     <span>RTC</span>         <span id="rtc">—</span>
     <span>WiFi</span>        <span id="wifi">—</span>
+    <span>Heartbeat</span>   <span id="heartbeat">—</span>
     <span>Uptime</span>      <span id="uptime">—</span>
     <span>Last reset</span>  <span id="reset">—</span>
     <span>Firmware</span>    <span id="firmware">—</span>
@@ -619,13 +620,10 @@
       $('clockSub').textContent = '';
     }
 
-    // Banner
-    const problems = [];
-    if (!d.time.valid) problems.push(`Clock not set — holding ${d.peak.active ? 'PEAK' : 'OFF-PEAK'} until NTP sync. Check WiFi and the RTC battery.`);
-    else if (!d.rtc.present) problems.push('DS3231 RTC not detected — schedule will be lost on power failure without WiFi.');
-    else if (d.rtc.lostPower) problems.push('RTC lost power (replace the coin cell?) — waiting for NTP to correct it.');
-    $('banner').textContent = problems.join(' ');
-    $('banner').classList.toggle('show', problems.length > 0);
+    // Banner — same problem list the heartbeat reports
+    const banner = $('banner');
+    banner.replaceChildren(...d.problems.map(p => Object.assign(document.createElement('div'), { textContent: '⚠ ' + p })));
+    banner.classList.toggle('show', d.problems.length > 0);
 
     // Peak
     const isPeak = d.peak.active;
@@ -695,6 +693,22 @@
     const wifi = $('wifi');
     wifi.textContent = d.wifi.connected ? `${d.wifi.ssid} · ${d.wifi.rssi} dBm · ${d.wifi.ip}` : '✗ Disconnected';
     wifi.className = d.wifi.connected ? (d.wifi.rssi < -75 ? 'warn' : 'good') : 'bad';
+
+    const hb = $('heartbeat'), h = d.heartbeat;
+    if (!h.enabled) {
+      hb.textContent = 'Not configured';
+      hb.className = 'warn';
+    } else if (h.lastTryAge < 0) {
+      hb.textContent = 'Waiting for first ping';
+      hb.className = '';
+    } else if (h.lastOkAge >= 0 && h.lastOkAge <= h.lastTryAge) {
+      hb.textContent = (h.reportedFail ? '⚠ Reported problem · ' : '✓ ') + ago(h.lastOkAge);
+      hb.className = h.reportedFail ? 'warn' : 'good';
+    } else {
+      hb.textContent = `✗ ${h.lastCode > 0 ? 'HTTP ' + h.lastCode : 'error ' + h.lastCode}` +
+                       (h.lastOkAge >= 0 ? ` · last OK ${ago(h.lastOkAge)}` : '');
+      hb.className = 'bad';
+    }
 
     $('uptime').textContent = duration(Math.floor(d.uptime / 60));
     const reset = $('reset');

@@ -2,6 +2,7 @@
 """Fake ETS controller for working on the web UI without hardware.
 
     python3 tools/mock_server.py            # then open http://localhost:8080
+    python3 tools/mock_server.py 8080 "RTC lost power - replace coin cell?"   # simulate a problem
 
 Serves data/www/* and mimics the firmware's JSON API (no auth).
 """
@@ -25,6 +26,7 @@ state = {
     "override_until": 0.0,
     "last_zone": -1,
     "events": [],
+    "problems": sys.argv[2:],  # e.g. mock_server.py 8080 "RTC lost power - replace coin cell?"
 }
 
 
@@ -77,7 +79,7 @@ def status():
     ]
     return {
         "device": "Steffes CCRP Controller (mock)",
-        "firmware": "2.0.0",
+        "firmware": "2.1.0",
         "uptime": int(time.time() - BOOT),
         "reset": "power-on",
         "time": {
@@ -91,6 +93,9 @@ def status():
         "relays": [{"id": i, "label": l, "on": on} for i, l, on in relays],
         "rtc": {"present": True, "lostPower": False, "tempC": 23.75},
         "wifi": {"connected": True, "ssid": "mock-net", "rssi": -58, "ip": "127.0.0.1", "hostname": "etstimer"},
+        "problems": list(state["problems"]),
+        "heartbeat": {"enabled": True, "interval": 300, "lastOkAge": 42, "lastTryAge": 42,
+                      "lastCode": 200, "reportedFail": bool(state["problems"])},
     }
 
 
@@ -121,6 +126,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(200, status())
         if path == "/api/schedule":
             return self.send_json(200, {"days": state["schedule"]})
+        if path == "/api/health":
+            ok = not state["problems"]
+            return self.send_json(200 if ok else 503, {"ok": ok, "problems": state["problems"]})
         if path == "/api/events":
             return self.send_json(200, state["events"])
         self.send_error(404)

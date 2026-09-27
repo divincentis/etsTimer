@@ -12,6 +12,7 @@ An ESP32-based replacement for Steffes Connect or other ETS peak/off-peak timers
 - **Admin page** (Digest auth): schedule editor with live preview, over-the-air firmware update, reboot.
 - Setback state and schedule persist in NVS across reboots and firmware updates.
 - Single firmware image: the web UI is compiled in, so there's no filesystem upload.
+- **Offline alerts**: a heartbeat to Healthchecks.io (or similar) tells you when the device goes quiet, and flags problems like a dead RTC battery before they bite.
 - `http://etstimer.local` via mDNS.
 
 ## Hardware
@@ -84,6 +85,37 @@ Edit it at `http://etstimer.local/admin`. Each day has up to four peak windows. 
 
 Times are local wall-clock time. The timezone and DST rules come from `POSIX_TZ_STRING` in `src/config.h` (Mountain Time by default).
 
+## Monitoring
+
+A device can't tell you it's offline, so something outside has to notice when it goes quiet. The controller POSTs a one-line status to a heartbeat URL every 5 minutes. A monitoring service alerts you when those pings stop, whether the ESP32 has died, the power is out or the internet is down.
+
+### Setup with [Healthchecks.io](https://healthchecks.io) (free, or self-host it)
+
+1. Create a check. Set **Period** to 5 minutes and **Grace** to 10 minutes.
+2. Add the alert channels you want: email, SMS, Telegram, ntfy, Pushover, Slack…
+3. Put the ping URL in `src/secrets.h`:
+   ```cpp
+   #define HEARTBEAT_URL "https://hc-ping.com/your-check-uuid"
+   ```
+4. Flash. The dashboard's System card shows when the last heartbeat went out.
+
+### What triggers an alert
+
+| Situation | What Healthchecks sees |
+|-----------|------------------------|
+| Device dead / hung, power cut, WiFi or internet down | Pings stop → **down** after the grace period |
+| Clock not set (peak relay in failsafe), RTC missing or lost power, NTP stale >24h | `/fail` ping → **down** straight away, with the problem in the message |
+| Reboot caused by watchdog, crash or brownout | One `/fail` ping saying why, then back **up** on the next ping |
+
+Each ping body is a status line you can read in the check's log, e.g.
+`OFF-PEAK next change 83m | setback off | time ntp MDT | rtc ok 23.5C | wifi -58dBm | up 3h12m | reset power-on | fw 2.1.0`.
+
+HTTPS certificates are verified against Mozilla's root CAs embedded in the firmware (`data/cert/`, refresh with `tools/update_ca_bundle.sh`). Any service that accepts a POST to a URL works for the basic heartbeat. The `/fail` suffix is Healthchecks' convention: set `HEARTBEAT_REPORT_PROBLEMS false` in `config.h` if your service doesn't support it.
+
+### Local monitoring
+
+`GET /api/health` returns `200 {"ok":true}` or `503` with a list of problems. Point Home Assistant, Uptime Kuma or any HTTP monitor at it. A monitor on the same LAN can't tell you about a power cut that takes it down too, so use it alongside the heartbeat, not instead of it.
+
 ## Timekeeping
 
 ```
@@ -115,6 +147,7 @@ The sequence runs from `loop()` without blocking, so the web server stays respon
 | GET  | `/api/status`   | — | — |
 | GET  | `/api/schedule` | — | — |
 | GET  | `/api/events`   | — | — |
+| GET  | `/api/health`   | — | — |
 | POST | `/api/setback`  | `{"on": true}` | optional¹ |
 | POST | `/api/override` | `{"zone": 0}` (0 = RL1, 1 = RL2,3, 2 = RL7-9) | optional¹ |
 | POST | `/admin/api/schedule` | `{"days": {"sun": [], "mon": [{"start": "17:00", "end": "22:00"}], …}}` | admin |
@@ -141,6 +174,7 @@ lib/etscore/    schedule + override logic — plain C++, unit-tested on the host
 test/           doctest unit tests
 data/www/       dashboard + admin pages (embedded into the firmware)
 tools/          mock_server.py — fake device for UI work without hardware
+                update_ca_bundle.sh — refresh the embedded root CAs
 ```
 
 ```bash

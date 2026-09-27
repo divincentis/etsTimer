@@ -8,6 +8,7 @@
 #include "config.h"
 #include "Controller.h"
 #include "EventLog.h"
+#include "Heartbeat.h"
 
 // Web pages are compiled into the firmware (board_build.embed_txtfiles in
 // platformio.ini), so a single .bin — flashed over USB or uploaded from the
@@ -21,6 +22,7 @@ extern const char ADMIN_HTML_END[]     asm("_binary_data_www_admin_schedule_html
 //   GET  /api/status             live state (public)
 //   GET  /api/schedule           weekly schedule (public)
 //   GET  /api/events             recent event log (public)
+//   GET  /api/health             200 {"ok":true} or 503 with problems — for pollers
 //   POST /api/setback            {"on": true|false}
 //   POST /api/override           {"zone": 0|1|2}
 //   POST /admin/api/schedule     schedule JSON               (admin)
@@ -35,7 +37,7 @@ class WebUI {
 public:
     WebUI() : _server(80) {}
 
-    void begin(Controller& ctl) {
+    void begin(Controller& ctl, Heartbeat& heartbeat) {
         _auth.setUsername(ADMIN_USERNAME);
         _auth.setPassword(ADMIN_PASSWORD);
         _auth.setRealm(DEVICE_HOSTNAME);
@@ -44,10 +46,20 @@ public:
         _auth.generateHash();
 
         // ── Public API ──────────────────────────────────────────────────
-        _server.on("/api/status", HTTP_GET, [&ctl](AsyncWebServerRequest* req) {
+        _server.on("/api/status", HTTP_GET, [&ctl, &heartbeat](AsyncWebServerRequest* req) {
             JsonDocument doc;
             ctl.status(doc.to<JsonObject>());
+            heartbeat.toJson(doc["heartbeat"].to<JsonObject>());
             sendJson(req, 200, doc);
+        });
+
+        _server.on("/api/health", HTTP_GET, [&ctl](AsyncWebServerRequest* req) {
+            Controller::Health h = ctl.health();
+            JsonDocument doc;
+            doc["ok"] = h.ok();
+            JsonArray problems = doc["problems"].to<JsonArray>();
+            for (uint8_t i = 0; i < h.count; i++) problems.add(h.problems[i]);
+            sendJson(req, h.ok() ? 200 : 503, doc);
         });
 
         _server.on("/api/schedule", HTTP_GET, [&ctl](AsyncWebServerRequest* req) {

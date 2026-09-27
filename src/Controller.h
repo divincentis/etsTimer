@@ -20,6 +20,16 @@ class Controller {
 public:
     enum class OverrideResult : uint8_t { Ok, Busy, BadZone };
 
+    // Conditions worth alerting on. No problems = healthy.
+    struct Health {
+        static constexpr uint8_t MAX = 4;
+        const char* problems[MAX] = {};
+        uint8_t     count = 0;
+
+        bool ok() const { return count == 0; }
+        void add(const char* p) { if (count < MAX) problems[count++] = p; }
+    };
+
     void begin() {
         _lock = xSemaphoreCreateMutex();
         _relays.begin();
@@ -57,8 +67,12 @@ public:
 
         out["device"]   = DEVICE_NAME;
         out["firmware"] = FIRMWARE_VERSION;
-        out["uptime"]   = (uint32_t)(esp_timer_get_time() / 1000000);
+        out["uptime"]   = uptimeS();
         out["reset"]    = resetReasonName(esp_reset_reason());
+
+        Health h = healthLocked();
+        JsonArray problems = out["problems"].to<JsonArray>();
+        for (uint8_t i = 0; i < h.count; i++) problems.add(h.problems[i]);
 
         struct tm t;
         bool valid = _clock.localNow(t);
@@ -106,6 +120,38 @@ public:
         wifi["rssi"]      = WiFi.RSSI();
         wifi["ip"]        = WiFi.localIP().toString();
         wifi["hostname"]  = DEVICE_HOSTNAME;
+    }
+
+    Health health() {
+        Guard g(_lock);
+        return healthLocked();
+    }
+
+    // One line for the heartbeat body, e.g.
+    // "OFF-PEAK next change 83m | setback off | time ntp MDT | rtc ok 23.5C | wifi -58dBm | up 3h12m | reset power-on | fw 2.1.0"
+    String summary() {
+        Guard g(_lock);
+        struct tm t;
+        bool valid = _clock.localNow(t);
+        int32_t next = valid ? _store.schedule.minutesUntilChange(t.tm_wday, t.tm_hour * 60 + t.tm_min) : -1;
+        uint32_t up = uptimeS();
+
+        char nextBuf[32] = "";
+        if (next >= 0) snprintf(nextBuf, sizeof(nextBuf), " next change %ldm", (long)next);
+
+        char buf[200];
+        snprintf(buf, sizeof(buf),
+            "%s%s | setback %s | time %s %s | rtc %s %.1fC | wifi %ddBm | up %luh%02lum | reset %s | fw %s",
+            _relays.get(RELAY_PEAK) ? "PEAK" : "OFF-PEAK",
+            nextBuf,
+            _relays.get(RELAY_SETBACK) ? "on" : "off",
+            TimeManager::sourceName(_clock.source()), _clock.tzAbbr().c_str(),
+            !_clock.rtcPresent() ? "missing" : _clock.rtcLostPower() ? "lost-power" : "ok",
+            isnan(_clock.rtcTempC()) ? 0.0f : _clock.rtcTempC(),
+            (int)WiFi.RSSI(),
+            (unsigned long)(up / 3600), (unsigned long)(up / 60 % 60),
+            resetReasonName(esp_reset_reason()), FIRMWARE_VERSION);
+        return String(buf);
     }
 
     void schedule(JsonObject out) {
@@ -174,6 +220,24 @@ private:
     unsigned long     _lastEval    = 0;
     bool              _timeWasValid = true;  // so a boot without time gets logged
     volatile uint32_t _rebootAt    = 0;
+
+    static uint32_t uptimeS() { return (uint32_t)(esp_timer_get_time() / 1000000); }
+
+    // Caller holds the lock.
+    Health healthLocked() const {
+        Health h;
+        if (!_clock.valid())       h.add("clock not set - peak relay held in failsafe");
+        if (!_clock.rtcPresent())  h.add("DS3231 RTC not found");
+        else if (_clock.rtcLostPower()) h.add("RTC lost power - replace coin cell?");
+
+        time_t last = _clock.lastNtpSync();
+        if (last == 0 && uptimeS() > 3600) {
+            h.add("no NTP sync since boot");
+        } else if (last != 0 && ::time(nullptr) - last > 24 * 3600) {
+            h.add("no NTP sync for over 24h");
+        }
+        return h;
+    }
 
     // Caller holds the lock.
     void evaluatePeak() {

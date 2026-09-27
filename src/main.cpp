@@ -7,11 +7,13 @@
 #include "config.h"
 #include "Controller.h"
 #include "EventLog.h"
+#include "Heartbeat.h"
 #include "WebUI.h"
 
 EventLog   eventLog;
 Controller controller;
 WebUI      webUI;
+Heartbeat  heartbeat;
 
 // ── WiFi ─────────────────────────────────────────────────────────────────────
 // Non-blocking: the schedule runs from the RTC whether or not WiFi is up.
@@ -73,7 +75,8 @@ void setup() {
 
     controller.begin();  // relays (watchdog relay on), RTC, saved schedule
     startWifi();
-    webUI.begin(controller);
+    webUI.begin(controller, heartbeat);
+    heartbeat.begin(controller);  // background task; pings once WiFi is up
 }
 
 // ── Loop ──────────────────────────────────────────────────────────────────────

@@ -12,12 +12,16 @@
 #include "secrets.example.h"
 #endif
 
+#ifndef HEARTBEAT_URL
+#define HEARTBEAT_URL ""  // secrets.h files from before monitoring existed
+#endif
+
 // ─────────────────────────────────────────────
 //  Device Identity
 // ─────────────────────────────────────────────
 #define DEVICE_NAME      "Steffes CCRP Controller"
 #define DEVICE_HOSTNAME  "etstimer"          // http://etstimer.local via mDNS
-#define FIRMWARE_VERSION "2.0.0"
+#define FIRMWARE_VERSION "2.1.0"
 
 // Set to true to require the admin login for the setback toggle and
 // override pulse too (the dashboard itself stays readable).
@@ -73,6 +77,22 @@
 // ─────────────────────────────────────────────
 #define OVERRIDE_SELECTOR_SETTLE_MS   50
 #define OVERRIDE_PULSE_MS             500
+
+// ─────────────────────────────────────────────
+//  Monitoring (heartbeat)
+//  Every HEARTBEAT_INTERVAL_S the device POSTs a one-line status to
+//  HEARTBEAT_URL (set it in secrets.h). A monitoring service such as
+//  Healthchecks.io alerts you when the pings stop: device dead, power out,
+//  or internet down. Empty URL = disabled.
+// ─────────────────────────────────────────────
+#define HEARTBEAT_INTERVAL_S       300
+
+// While something is wrong (clock not set, RTC trouble, NTP stale) — and on
+// the first ping after a crash/watchdog/brownout reboot — ping
+// HEARTBEAT_URL + "/fail" instead, so the service alerts even though the
+// device is still online. This is Healthchecks.io's convention; set false
+// for services that don't support it.
+#define HEARTBEAT_REPORT_PROBLEMS  true
 
 // ─────────────────────────────────────────────
 //  Watchdog
