@@ -182,7 +182,7 @@ pio test -e native              # unit tests on your computer
 python3 tools/mock_server.py    # UI at http://localhost:8080 against a fake device
 ```
 
-GitHub Actions runs the tests and builds the firmware on every push. The built `firmware.bin` is attached to each run as an artifact, ready for the admin page's firmware update.
+GitHub Actions runs the tests and builds the firmware on every push. It builds with placeholder credentials, so there is no downloadable binary. Build your own (`pio run`) with your `secrets.h` and upload `.pio/build/esp32dev/firmware.bin` from the admin page.
 
 ## License
 

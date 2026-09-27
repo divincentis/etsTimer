@@ -25,11 +25,13 @@ jobs:
       - name: Unit tests (host)
         run: pio test -e native
 
+      # CI has no real secrets.h. Use the example with a dummy heartbeat URL
+      # so the heartbeat/HTTPS code is compiled and linked, not optimised away
+      # as dead code. The resulting binary has placeholder WiFi credentials,
+      # so it is deliberately not published.
       - name: Build firmware
-        run: pio run -e esp32dev
-
-      - name: Upload firmware
-        uses: actions/upload-artifact@v4
-        with:
-          name: firmware-${{ github.sha }}
-          path: .pio/build/esp32dev/firmware.bin
+        run: |
+          sed 's#^\(\#define HEARTBEAT_URL *\)""#\1"https://hc-ping.com/ci-build-check"#' \
+              src/secrets.example.h > src/secrets.h
+          grep -q 'hc-ping.com/ci-build-check' src/secrets.h
+          pio run -e esp32dev
