@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Unit tests (host)
+        run: pio test -e native
+
+      # CI has no real secrets.h. Use the example with a dummy heartbeat URL
+      # so the heartbeat/HTTPS code is compiled and linked, not optimised away
+      # as dead code. The resulting binary has placeholder WiFi credentials,
+      # so it is deliberately not published.
+      - name: Build firmware
+        run: |
+          sed 's#^\(\#define HEARTBEAT_URL *\)""#\1"https://hc-ping.com/ci-build-check"#' \
+              src/secrets.example.h > src/secrets.h
+          grep -q 'hc-ping.com/ci-build-check' src/secrets.h
+          pio run -e esp32dev

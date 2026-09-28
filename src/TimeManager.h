@@ -3,146 +3,141 @@
 #include <Arduino.h>
 #include <RTClib.h>
 #include <Wire.h>
+#include <esp_sntp.h>
+#include <sys/time.h>
 #include <time.h>
+#include <atomic>
 #include "config.h"
+#include "EventLog.h"
 
+// One clock for the whole system: the ESP32 system clock (time()).
+//
+//   boot:  DS3231 (stores UTC) ──settimeofday──► system clock
+//   NTP:   SNTP runs in the background, updates the system clock, and on
+//          every sync we write UTC back to the DS3231.
+//
+// Local time + DST come from POSIX_TZ_STRING via localtime_r(). We use
+// configTzTime() rather than configTime(): configTime() overwrites the TZ
+// environment variable with a fixed UTC offset, which would silently turn
+// the schedule into UTC.
 class TimeManager {
 public:
-    RTC_DS3231 rtc;
-    bool rtcOk     = false;
-    bool ntpSynced = false;
-    unsigned long lastNtpSync = 0;
+    enum class Source : uint8_t { None, Rtc, Ntp };
 
-    bool begin() {
-        Wire.begin(PIN_SDA, PIN_SCL);
-        rtcOk = rtc.begin();
-
-        if (!rtcOk) {
-            Serial.println("[Time] DS3231 not found! Timekeeping will be unreliable.");
-            return false;
-        }
-
-        // Set POSIX TZ immediately so local time is correct even before NTP
+    void begin() {
         setenv("TZ", POSIX_TZ_STRING, 1);
         tzset();
 
-        if (rtc.lostPower()) {
-            Serial.println("[Time] RTC lost power — time not set. NTP sync required.");
+        Wire.begin(PIN_SDA, PIN_SCL);
+        _rtcPresent = _rtc.begin(&Wire);
+
+        if (!_rtcPresent) {
+            eventLog.add("DS3231 RTC not found - waiting for NTP");
         } else {
-            Serial.println("[Time] RTC OK");
-            DateTime n = nowLocal();
-            Serial.printf("[Time] Local time: %04d-%02d-%02d %02d:%02d:%02d %s\n",
-                n.year(), n.month(), n.day(),
-                n.hour(), n.minute(), n.second(),
-                tzAbbr().c_str());
+            _rtcLostPower = _rtc.lostPower();
+            uint32_t rtcEpoch = _rtc.now().unixtime();
+            if (_rtcLostPower) {
+                eventLog.add("RTC lost power - time unknown until NTP sync");
+            } else if (rtcEpoch < MIN_VALID_EPOCH) {
+                eventLog.add("RTC time implausible - waiting for NTP");
+            } else {
+                struct timeval tv = { (time_t)rtcEpoch, 0 };
+                settimeofday(&tv, nullptr);
+                _source = Source::Rtc;
+                eventLog.add("Clock set from RTC: %s", localString().c_str());
+            }
+            _rtcTempC = _rtc.getTemperature();
         }
 
-        return true;
+        // Must be configured before SNTP starts.
+        sntp_set_sync_interval(NTP_SYNC_INTERVAL_MS);
+        sntp_set_time_sync_notification_cb(onNtpSync);
     }
 
-    // Call after WiFi connects.
-    // NTP always returns UTC. POSIX_TZ_STRING handles local time + DST.
-    // RTC is always stored in UTC — local time derived at read time.
-    bool syncNTP() {
-        Serial.println("[Time] Starting NTP sync...");
-
-        // POSIX TZ already set in begin() — just fetch UTC from NTP
-        configTime(0, 0, NTP_SERVER);
-
-        struct tm timeinfo;
-        int attempts = 0;
-        while (!getLocalTime(&timeinfo) && attempts < 20) {
-            delay(500);
-            attempts++;
-            Serial.print(".");
-        }
-        Serial.println();
-
-        if (attempts >= 20) {
-            Serial.println("[Time] NTP sync failed, falling back to RTC");
-            return false;
-        }
-
-        // Store UTC in RTC — never store local time to avoid DST double-adjustment
-        time_t utcNow = time(nullptr);
-        if (rtcOk) {
-            rtc.adjust(DateTime((uint32_t)utcNow));
-            Serial.println("[Time] RTC updated from NTP (UTC stored)");
-        }
-
-        ntpSynced = true;
-        lastNtpSync = millis();
-        Serial.printf("[Time] NTP sync OK. Local: %s", asctime(&timeinfo));
-        return true;
+    // Start background NTP. Call once the network is up; later calls are no-ops.
+    // SNTP keeps retrying and re-syncing on its own after this.
+    void startNtp() {
+        if (_ntpStarted) return;
+        _ntpStarted = true;
+        configTzTime(POSIX_TZ_STRING, NTP_SERVER_1, NTP_SERVER_2);
+        eventLog.add("NTP started (%s)", NTP_SERVER_1);
     }
 
-    // Periodic re-sync — TZ env already set, just refresh UTC from NTP
+    // Call from loop(). All I2C traffic happens here, on the loop task.
     void loop() {
-        if (ntpSynced && (millis() - lastNtpSync > NTP_SYNC_INTERVAL_MS)) {
-            Serial.println("[Time] Periodic NTP re-sync");
-            struct tm timeinfo;
-            if (getLocalTime(&timeinfo)) {
-                time_t utcNow = time(nullptr);
-                if (rtcOk) {
-                    rtc.adjust(DateTime((uint32_t)utcNow));
-                }
-                lastNtpSync = millis();
-                Serial.println("[Time] Periodic NTP sync OK");
+        if (s_ntpSyncPending.exchange(false)) {
+            time_t now = time(nullptr);
+            _source      = Source::Ntp;
+            _lastNtpSync = now;
+            if (_rtcPresent) {
+                _rtc.adjust(DateTime((uint32_t)now));  // UTC; also clears the lost-power flag
+                _rtcLostPower = false;
+            }
+            if (!_loggedFirstSync) {
+                _loggedFirstSync = true;
+                eventLog.add("NTP sync OK: %s", localString().c_str());
             }
         }
-    }
 
-    // Returns local time, DST-correct via POSIX TZ string
-    // RTC stores UTC; this converts to local automatically
-    DateTime nowLocal() {
-        time_t utc;
-        if (rtcOk) {
-            utc = (time_t)rtc.now().unixtime();
-        } else {
-            utc = time(nullptr);
+        if (_rtcPresent && millis() - _lastTempRead > 60000UL) {
+            _lastTempRead = millis();
+            _rtcTempC = _rtc.getTemperature();
         }
-        struct tm local;
-        localtime_r(&utc, &local);
-        return DateTime(
-            local.tm_year + 1900,
-            local.tm_mon  + 1,
-            local.tm_mday,
-            local.tm_hour,
-            local.tm_min,
-            local.tm_sec
-        );
     }
 
-    // Formatted local time string for UI
-    String timeString() {
-        DateTime n = nowLocal();
-        char buf[32];
-        snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
-            n.year(), n.month(), n.day(),
-            n.hour(), n.minute(), n.second());
+    bool valid() const { return time(nullptr) >= (time_t)MIN_VALID_EPOCH; }
+
+    // Fills `out` with local time; returns false if the clock is not set.
+    bool localNow(struct tm& out) const {
+        time_t now = time(nullptr);
+        localtime_r(&now, &out);
+        return now >= (time_t)MIN_VALID_EPOCH;
+    }
+
+    // "2026-09-27T14:03:11"
+    String localString() const {
+        struct tm t;
+        localNow(t);
+        char buf[24];
+        strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &t);
         return String(buf);
     }
 
-    // Current TZ abbreviation — "MST" or "MDT"
-    String tzAbbr() {
-        time_t utc = time(nullptr);
-        struct tm local;
-        localtime_r(&utc, &local);
-        return String(local.tm_zone);
+    // "MST" / "MDT"
+    String tzAbbr() const {
+        struct tm t;
+        localNow(t);
+        char buf[8];
+        strftime(buf, sizeof(buf), "%Z", &t);
+        return String(buf);
     }
 
-    // Day of week string
-    String dowString() {
-        DateTime n = nowLocal();
-        const char* days[] = {
-            "Sunday","Monday","Tuesday","Wednesday",
-            "Thursday","Friday","Saturday"
-        };
-        return String(days[n.dayOfTheWeek()]);
+    Source source()       const { return _source; }
+    time_t lastNtpSync()  const { return _lastNtpSync; }
+    bool   rtcPresent()   const { return _rtcPresent; }
+    bool   rtcLostPower() const { return _rtcLostPower; }
+    float  rtcTempC()     const { return _rtcTempC; }
+
+    static const char* sourceName(Source s) {
+        switch (s) {
+            case Source::Rtc: return "rtc";
+            case Source::Ntp: return "ntp";
+            default:          return "none";
+        }
     }
 
-    float rtcTemperature() {
-        if (!rtcOk) return 0.0f;
-        return rtc.getTemperature();
-    }
+private:
+    RTC_DS3231 _rtc;
+    bool   _rtcPresent      = false;
+    bool   _rtcLostPower    = false;
+    bool   _ntpStarted      = false;
+    bool   _loggedFirstSync = false;
+    Source _source          = Source::None;
+    time_t _lastNtpSync     = 0;
+    float  _rtcTempC        = NAN;
+    unsigned long _lastTempRead = 0;
+
+    // Set from the lwIP task; consumed on the loop task.
+    static inline std::atomic<bool> s_ntpSyncPending{false};
+    static void onNtpSync(struct timeval*) { s_ntpSyncPending = true; }
 };
