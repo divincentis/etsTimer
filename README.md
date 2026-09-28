@@ -47,6 +47,8 @@ An ESP32-based replacement for Steffes Connect or other ETS peak/off-peak timers
 
 ## Setup
 
+For a full walkthrough — bench tests, failsafe wiring, installation and updates — see the **[Deployment Guide](docs/DEPLOYMENT.md)**. The short version:
+
 ### 1. Configure
 
 ```bash
